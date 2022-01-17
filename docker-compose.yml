@@ -21,6 +21,30 @@ services:
       - elasticsearch
     networks:
       - tracing
+## Newly added for jeager agent and collector
+  jaeger-agent: 
+    image: jaegertracing/jaeger-agent:latest
+    ports:
+      - "6000:6831/udp"
+    command: ["--reporter.grpc.host-port=jaeger-collector:14250"]
+    networks:
+      - tracing
+  jaeger-collector:
+    image: jaegertracing/jaeger-collector:latest
+    environment:
+      - SPAN_STORAGE_TYPE=kafka
+    command: ["--kafka.producer.brokers=https://pkc-ymrq7.us-east-2.aws.confluent.cloud:9092",
+              "--kafka.producer.topic=opentracing-metrices",
+              "--kafka.producer.plaintext.mechanism=PLAIN",
+              "--kafka.producer.plaintext.username=EFSFDSMHO2G2V4GS",
+              "--kafka.producer.plaintext.password=3cmahkytxeZqIRSUGuuvXOVmJGnd2txjr+W2/DXe1oyZIYHoQ/sFcc/LbHAahd+B",
+              "--kafka.producer.tls.skip-host-verify",
+              "--log-level=debug"
+    ] 
+    ports:
+      - 14250
+    networks:
+      - tracing
 networks:
   tracing:
     driver: bridge

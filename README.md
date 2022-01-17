@@ -23,3 +23,8 @@ docker run -d --name jaeger -p 5775:5775/udp -p 6831:6831/udp -p 6832:6832/udp -
 Reference: [ Jaeger Architecture](https://www.jaegertracing.io/docs/1.29/architecture/#components)
 
 
+Collector Reference: 
+- To view the List of available Kafka Configurations, use this Command:
+   `docker run -e SPAN_STORAGE_TYPE=kafka jaegertracing/jaeger-collector:latest --help `
+
+
