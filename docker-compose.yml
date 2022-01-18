@@ -21,30 +21,51 @@ services:
       - elasticsearch
     networks:
       - tracing
-## Newly added for jeager agent and collector
+
+## Jaeger Agent
   jaeger-agent: 
     image: jaegertracing/jaeger-agent:latest
     ports:
-      - "6000:6831/udp"
+      - "6831:6831/udp"
     command: ["--reporter.grpc.host-port=jaeger-collector:14250"]
     networks:
       - tracing
+    depends_on:
+      - jaeger-collector
+
+# Jaeger Collector 
   jaeger-collector:
     image: jaegertracing/jaeger-collector:latest
     environment:
-      - SPAN_STORAGE_TYPE=kafka
-    command: ["--kafka.producer.brokers=https://pkc-ymrq7.us-east-2.aws.confluent.cloud:9092",
-              "--kafka.producer.topic=opentracing-metrices",
-              "--kafka.producer.plaintext.mechanism=PLAIN",
-              "--kafka.producer.plaintext.username=EFSFDSMHO2G2V4GS",
-              "--kafka.producer.plaintext.password=3cmahkytxeZqIRSUGuuvXOVmJGnd2txjr+W2/DXe1oyZIYHoQ/sFcc/LbHAahd+B",
-              "--kafka.producer.tls.skip-host-verify",
-              "--log-level=debug"
-    ] 
+      - SPAN_STORAGE_TYPE=elasticsearch
+    command: ["--es.server-urls=http://elasticsearch:9200"] 
     ports:
-      - 14250
+      - 14250:14250
     networks:
       - tracing
+    depends_on:
+      - elasticsearch
+    restart: on-failure
+
+# Jaeger Query (UI)    
+  jaeger-query:
+      image: jaegertracing/jaeger-query:latest
+      command: [ "--es.num-shards=1"
+                , "--es.num-replicas=0"
+                , "--es.server-urls=http://elasticsearch:9200"
+                ]
+      ports:
+        - "16686:16686"
+        - "16687"
+      environment:
+        - SPAN_STORAGE_TYPE=elasticsearch
+        - LOG_LEVEL=debug
+      restart: on-failure
+      networks:
+        - tracing
+      depends_on:
+        - elasticsearch
+        - jaeger-agent
 networks:
   tracing:
     driver: bridge
