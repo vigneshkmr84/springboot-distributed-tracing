@@ -1,26 +1,30 @@
 version: '3'
 services:
-  # elasticsearch:
-  #   image: elasticsearch:7.16.3
-  #   ports:
-  #     - "9200:9200"
-  #     - "9300:9300"
-  #   networks:
-  #     - tracing
-  #   environment:
-  #     - node.name=elasticsearch
-  #     - discovery.type=single-node
-  # kibana:
-  #   image: kibana:7.16.3
-  #   ports:
-  #     - "5601:5601"
-  #   environment:
-  #     - ELASTICSEARCH_URL:http://elasticsearch:9200
-  #     - ELASTICSEARCH_HOSTS:'["http://elasticsearch:9200"]'
-  #   depends_on:
-  #     - elasticsearch
-  #   networks:
-  #     - tracing
+
+  elasticsearch:
+    image: elasticsearch:7.16.3
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    networks:
+      - tracing
+    environment:
+      - node.name=elasticsearch
+      - discovery.type=single-node
+    restart: on-failure
+      
+  kibana:
+    image: kibana:7.16.3
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_URL:http://elasticsearch:9200
+      - ELASTICSEARCH_HOSTS:'["http://elasticsearch:9200"]'
+    depends_on:
+      - elasticsearch
+    networks:
+      - tracing
+    restart: on-failure
 
 ## Jaeger Agent
   jaeger-agent: 
@@ -32,6 +36,7 @@ services:
       - tracing
     depends_on:
       - jaeger-collector
+    restart: on-failure
 
 # Jaeger Collector 
   jaeger-collector:
@@ -44,7 +49,6 @@ services:
       - tracing
     restart: on-failure
     command: [ "--kafka.producer.brokers=kafka:9092"
-            #"--kafka.producer.brokers=host.docker.internal:9092"
             , "--kafka.producer.topic=jaeger-spans"
     ]
 
@@ -57,6 +61,7 @@ services:
       - 22181:2181
     networks:
       - tracing
+    restart: on-failure
 
   kafka:
     image: confluentinc/cp-kafka:latest
@@ -71,28 +76,48 @@ services:
       #KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       TOPIC_AUTO_CREATE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     networks:
       - tracing
+    restart: on-failure
   
-# # Jaeger Query (UI)    
-#   jaeger-query:
-#       image: jaegertracing/jaeger-query:latest
-#       command: [ "--es.num-shards=1"
-#                 , "--es.num-replicas=0"
-#                 , "--es.server-urls=http://elasticsearch:9200"
-#                 ]
-#       ports:
-#         - "16686:16686"
-#         - "16687"
-#       environment:
-#         - SPAN_STORAGE_TYPE=elasticsearch
-#         - LOG_LEVEL=debug
-#       restart: on-failure
-#       networks:
-#         - tracing
-#       depends_on:
-#         - elasticsearch
-#         - jaeger-agent
+  jaeger-ingester:
+    image: jaegertracing/jaeger-ingester:latest
+    ports: 
+      - 14270:14270/tcp
+    environment: 
+      - SPAN_STORAGE_TYPE=elasticsearch
+    networks:
+      - tracing
+    depends_on:
+      - jaeger-collector
+      - elasticsearch
+    command: [ "--es.server-urls=http://elasticsearch:9200"
+            , "--kafka.consumer.group-id=jaeger-ingester"
+            , "--kafka.consumer.topic=jaeger-spans"
+            , "--kafka.consumer.brokers=kafka:9092"
+    ]
+    restart: on-failure
+
+# Jaeger Query (UI)    
+  jaeger-query:
+      image: jaegertracing/jaeger-query:latest
+      command: [ "--es.num-shards=1"
+                , "--es.num-replicas=0"
+                , "--es.server-urls=http://elasticsearch:9200"
+      ]
+      ports:
+        - "16686:16686"
+        - "16687"
+      environment:
+        - SPAN_STORAGE_TYPE=elasticsearch
+        - LOG_LEVEL=debug
+      restart: on-failure
+      networks:
+        - tracing
+      depends_on:
+        - elasticsearch
+        - jaeger-agent
 networks:
   tracing:
     driver: bridge
