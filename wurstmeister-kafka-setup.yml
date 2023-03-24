@@ -1,0 +1,91 @@
+version: '3'
+services:
+  # elasticsearch:
+  #   image: elasticsearch:7.16.3
+  #   ports:
+  #     - "9200:9200"
+  #     - "9300:9300"
+  #   networks:
+  #     - tracing
+  #   environment:
+  #     - node.name=elasticsearch
+  #     - discovery.type=single-node
+  # kibana:
+  #   image: kibana:7.16.3
+  #   ports:
+  #     - "5601:5601"
+  #   environment:
+  #     - ELASTICSEARCH_URL:http://elasticsearch:9200
+  #     - ELASTICSEARCH_HOSTS:'["http://elasticsearch:9200"]'
+  #   depends_on:
+  #     - elasticsearch
+  #   networks:
+  #     - tracing
+
+## Jaeger Agent
+  jaeger-agent: 
+    image: jaegertracing/jaeger-agent:latest
+    ports:
+      - "6831:6831/udp"
+    command: ["--reporter.grpc.host-port=jaeger-collector:14250"]
+    networks:
+      - tracing
+    depends_on:
+      - jaeger-collector
+
+# Jaeger Collector 
+  jaeger-collector:
+    image: jaegertracing/jaeger-collector:latest
+    environment:
+      - SPAN_STORAGE_TYPE=kafka
+    ports:
+      - 14250:14250
+    networks:
+      - tracing
+    restart: on-failure
+    command: [ "--kafka.producer.brokers=kafka:9092"
+            , "--kafka.producer.topic=jaeger-spans"
+    ]
+
+  zookeeper:
+    image: wurstmeister/zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    networks:
+      - tracing
+  kafka:
+    image: wurstmeister/kafka
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_ADVERTISED_HOST_NAME: localhost
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+    depends_on:
+      - zookeeper
+    networks:
+      - tracing
+
+# # Jaeger Query (UI)    
+#   jaeger-query:
+#       image: jaegertracing/jaeger-query:latest
+#       command: [ "--es.num-shards=1"
+#                 , "--es.num-replicas=0"
+#                 , "--es.server-urls=http://elasticsearch:9200"
+#                 ]
+#       ports:
+#         - "16686:16686"
+#         - "16687"
+#       environment:
+#         - SPAN_STORAGE_TYPE=elasticsearch
+#         - LOG_LEVEL=debug
+#       restart: on-failure
+#       networks:
+#         - tracing
+#       depends_on:
+#         - elasticsearch
+#         - jaeger-agent
+networks:
+  tracing:
+    driver: bridge
